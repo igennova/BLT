@@ -7,6 +7,7 @@ from datetime import timedelta
 from decimal import Decimal
 from enum import Enum
 from urllib.parse import parse_qs, urlparse
+from website.bitcoin_utils import create_bacon_token
 
 import requests
 from annoying.fields import AutoOneToOneField
@@ -2360,3 +2361,32 @@ class Notification(models.Model):
 
     class Meta:
         ordering = ["is_read", "-created_at"]
+@receiver(post_save, sender=Issue)
+def issue_token_on_verification(sender, instance, created, **kwargs):
+    """
+    Smart contract to automatically issue BACON tokens when a bug is verified.
+    """
+    # Only proceed if the issue is verified and has a user
+    if instance.user:
+        # Check if a contribution already exists for this issue
+        contribution, created = Contribution.objects.get_or_create(
+            github_id=str(instance.id),
+            defaults={
+                'user': instance.user,
+                'title': f"Bug report: {instance.url}",
+                'description': instance.description,
+                'contribution_type': "issue_closed",
+                'status': "closed",
+                'created': timezone.now(),
+                'github_url': instance.github_url or instance.url
+            }
+        )
+        
+        # If the contribution was just created or doesn't have a token yet
+        if created or not BaconToken.objects.filter(contribution=contribution).exists():
+            # Issue the token
+            token = create_bacon_token(instance.user, contribution)
+            if token:
+                print(f"BACON token {token.token_id} issued to {instance.user.username} for verified bug {instance.id}")
+            else:
+                print(f"Failed to issue BACON token to {instance.user.username} for verified bug {instance.id}")

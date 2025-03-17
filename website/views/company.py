@@ -41,11 +41,11 @@ logger = logging.getLogger("slack_bolt")
 logger.setLevel(logging.WARNING)
 
 restricted_domain = [
-    "gmail.com",
-    "hotmail.com",
-    "outlook.com",
-    "yahoo.com",
-    "proton.com",
+    # "gmail.com",
+    # "hotmail.com",
+    # "outlook.com",
+    # "yahoo.com",
+    # "proton.com",
 ]
 
 

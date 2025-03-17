@@ -12,6 +12,7 @@ from import_export import resources
 from import_export.admin import ImportExportModelAdmin
 
 from website.models import (
+    BaconToken,
     IP,
     Activity,
     BannedApp,
@@ -132,7 +133,8 @@ class BidAdmin(admin.ModelAdmin):
         "created",
         "modified",
     )
-
+class BaconTokenAdmin(admin.ModelAdmin):
+    list_display = ("id", "user", "token", "created")
 
 class WalletAdmin(admin.ModelAdmin):
     list_display = ("id", "user", "current_balance", "created")
@@ -761,6 +763,7 @@ admin.site.register(DailyStats, DailyStatsAdmin)
 admin.site.register(Queue, QueueAdmin)
 admin.site.register(JoinRequest, JoinRequestAdmin)
 admin.site.register(Notification)
+admin.site.register(BaconToken)
 
 
 @admin.register(BannedApp)

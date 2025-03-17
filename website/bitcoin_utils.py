@@ -3,7 +3,6 @@
 from bitcoinrpc.authproxy import AuthServiceProxy, JSONRPCException
 from django.conf import settings
 
-from website.models import BaconToken
 
 
 def get_rpc_client():
@@ -13,6 +12,7 @@ def get_rpc_client():
 
 
 def create_bacon_token(user, contribution):
+    from website.models import BaconToken
     rpc_client = get_rpc_client()
 
     try:

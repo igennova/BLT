@@ -116,6 +116,13 @@
                             </div>
                         {% endif %}
                     {% endfor %}
+                    {% if user.is_authenticated and user_is_organization_admin %}
+<li class="nav-item">
+    <a class="nav-link" href="{% url 'organization_slack_apps' %}">
+        <i class="fab fa-slack"></i> Slack Apps
+    </a>
+</li>
+
                 {% endif %}
             </main>
         </div>

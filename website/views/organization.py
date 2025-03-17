@@ -7,6 +7,9 @@ from collections import defaultdict
 from datetime import datetime, timedelta
 from decimal import Decimal
 from urllib.parse import urlparse
+from slack_sdk.web import WebClient
+from slack_sdk.errors import SlackApiError
+from website.models import SlackIntegration
 
 import requests
 from bs4 import BeautifulSoup
@@ -2657,3 +2660,72 @@ def room_messages_api(request, room_id):
         )
 
     return JsonResponse({"success": True, "count": room.messages.count(), "messages": message_data})
+
+
+@login_required(login_url="/accounts/login")
+def organization_slack_apps(request, template="organization/organization_slack_apps.html"):
+    try:
+        # Check if user is an organization admin
+        organization_admin = OrganizationAdmin.objects.get(user=request.user)
+        if not organization_admin.is_active:
+            return HttpResponseRedirect("/")
+            
+        # Get the organization
+        organization = organization_admin.organization
+        
+        # Check if organization has Slack integration
+        try:
+            slack_integration = SlackIntegration.objects.get(integration__organization=organization)
+            workspace_token = slack_integration.bot_access_token
+            
+            if not workspace_token:
+                return render(request, template, {
+                    "error": "Slack integration not properly configured. Bot access token is missing.",
+                    "organization": organization
+                })
+                
+            # Initialize Slack client
+            slack_client = WebClient(token=workspace_token)
+            
+            # Fetch installed apps
+            apps_response = slack_client.apps_list()
+            installed_apps = apps_response.get("apps", [])
+            
+            # For each app, fetch available commands if possible
+            apps_with_commands = []
+            for app in installed_apps:
+                app_id = app.get("id")
+                app_name = app.get("name")
+                app_description = app.get("description", "")
+                app_commands = []
+                
+                # Try to fetch commands for this app
+                try:
+                    commands_response = slack_client.apps_commands_list(app_id=app_id)
+                    app_commands = commands_response.get("commands", [])
+                except SlackApiError:
+                    # Some apps might not expose commands or we might not have permission
+                    pass
+                
+                apps_with_commands.append({
+                    "id": app_id,
+                    "name": app_name,
+                    "description": app_description,
+                    "commands": app_commands
+                })
+            
+            context = {
+                "organization": organization,
+                "apps": apps_with_commands,
+                "workspace_name": slack_integration.workspace_name or "Your Workspace"
+            }
+            return render(request, template, context)
+            
+        except SlackIntegration.DoesNotExist:
+            return render(request, template, {
+                "error": "This organization does not have Slack integration configured.",
+                "organization": organization
+            })
+            
+    except OrganizationAdmin.DoesNotExist:
+        return HttpResponseRedirect("/")

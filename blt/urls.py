@@ -189,6 +189,7 @@ from website.views.issue import (
     vote_count,
 )
 from website.views.organization import (
+    organization_slack_apps,
     CreateHunt,
     DomainDetailView,
     DomainList,
@@ -353,6 +354,11 @@ handler404 = "website.views.core.handler404"
 handler500 = "website.views.core.handler500"
 
 urlpatterns = [
+    path(
+    "dashboard/organization/slack-apps/",
+    organization_slack_apps,
+    name="organization_slack_apps",
+),
     path("banned-apps/", BannedAppsView.as_view(), name="banned_apps"),
     path("api/banned-apps/search/", search_banned_apps, name="search_banned_apps"),
     path("500/", TemplateView.as_view(template_name="500.html"), name="500"),
