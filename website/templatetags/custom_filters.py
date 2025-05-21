@@ -23,3 +23,15 @@ def before_dot(value):
 def to_json(value):
     """Convert Python object to JSON string"""
     return mark_safe(json.dumps(value, cls=DjangoJSONEncoder))
+
+
+@register.filter
+def get_range(value):
+    """
+    Filter - returns a list containing range made from given value
+    Usage (in template):
+    <ul>{% for i in 3|get_range %}
+      <li>{{ i }}. Do something</li>
+    {% endfor %}</ul>
+    """
+    return range(1, int(value) + 1)

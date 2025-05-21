@@ -275,7 +275,7 @@ from website.views.project import (
     select_contribution,
 )
 from website.views.queue import queue_list, update_txid
-from website.views.repo import RepoListView, add_repo, refresh_repo_data
+from website.views.repo import RepoListView, add_repo, refresh_repo_data, view_stargazers
 from website.views.slack_handlers import slack_commands, slack_events
 from website.views.social import queue_social_view
 from website.views.teams import (
@@ -739,6 +739,7 @@ urlpatterns = [
     path("projects/<slug:slug>/badge/", ProjectBadgeView.as_view(), name="project-badge"),
     path("repos/<slug:slug>/badge/", RepoBadgeView.as_view(), name="repo-badge"),
     path("repository/<slug:slug>/", RepoDetailView.as_view(), name="repo_detail"),
+    path("stargazers/", view_stargazers, name="view_stargazers"),
     path("repository/<int:repo_id>/refresh/", refresh_repo_data, name="refresh_repo_data"),
     re_path(r"^report-ip/$", ReportIpView.as_view(), name="report_ip"),
     re_path(r"^reported-ips/$", ReportedIpListView.as_view(), name="reported_ips_list"),

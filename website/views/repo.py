@@ -1,6 +1,7 @@
 import os
 import re
 import time
+from urllib.parse import urlparse
 
 import psutil
 import requests
@@ -10,6 +11,7 @@ from django.core.management import call_command
 from django.db import connection
 from django.db.models import Count, Q
 from django.http import JsonResponse
+from django.shortcuts import render
 from django.urls import reverse
 from django.utils.dateparse import parse_datetime
 from django.utils.text import slugify
@@ -288,6 +290,7 @@ class RepoDetailView(DetailView):
         """
         Fetch milestones from the GitHub API for the given repository.
         """
+
         milestones_url = f"https://api.github.com/repos/{repo.repo_url.split('github.com/')[-1]}/milestones"
         headers = {
             "Accept": "application/vnd.github.v3+json",
@@ -302,6 +305,32 @@ class RepoDetailView(DetailView):
         context = super().get_context_data(**kwargs)
         repo = self.get_object()
         context["milestones"] = self.fetch_github_milestones(repo)
+
+        # Fetch stargazers for this repo
+        try:
+            # Extract owner and repo name from repo_url
+            repo_path = repo.repo_url.split("github.com/")[-1]
+            owner, repo_name = repo_path.split("/")
+            print(f"Owner: {owner}, Repo Name: {repo_name}")
+
+            # GitHub API endpoint for stargazers
+            api_url = f"https://api.github.com/repos/{owner}/{repo_name}/stargazers"
+            headers = {
+                "Accept": "application/vnd.github.v3+json",
+            }
+
+            if settings.GITHUB_TOKEN:
+                headers["Authorization"] = f"token {settings.GITHUB_TOKEN}"
+
+            response = requests.get(api_url, headers=headers)
+            if response.status_code == 200:
+                context["stargazers"] = response.json()
+            else:
+                context["stargazers"] = []
+                context["stargazers_error"] = f"Error fetching stargazers: {response.status_code}"
+        except Exception as e:
+            context["stargazers"] = []
+            context["stargazers_error"] = "Error fetching stargazers"
 
         # Add breadcrumbs
         breadcrumbs = [
@@ -388,12 +417,10 @@ def add_repo(request):
             )
 
         # First try with token if available
-        github_token = getattr(settings, "GITHUB_TOKEN", None)
         headers = {"Accept": "application/vnd.github.v3+json"}
         use_token = False
-
-        if github_token:
-            headers["Authorization"] = f"token {github_token}"
+        if settings.GITHUB_TOKEN:
+            headers["Authorization"] = f"token {settings.GITHUB_TOKEN}"
             # Test the token with a request
             test_response = requests.get(api_url, headers=headers)
             use_token = test_response.status_code != 401  # Keep token if not unauthorized
@@ -629,3 +656,171 @@ def refresh_repo_data(request, repo_id):
             },
             status=500,
         )
+
+
+def view_stargazers(request):
+    stargazers = []
+    error = None
+    repo_url = request.POST.get("repo_url", "") or request.GET.get("repo_url", "")
+    filter_type = request.GET.get("filter", "all")  # Default to showing all stargazers
+    page = int(request.GET.get("page", 1))
+    per_page = 10  # Number of stargazers per page
+
+    if repo_url:
+        try:
+            # Parse the GitHub URL
+            parsed_url = urlparse(repo_url)
+            if parsed_url.netloc != "github.com":
+                error = "Please enter a valid GitHub repository URL"
+                return render(
+                    request,
+                    "repo/stargazers.html",
+                    {
+                        "stargazers": stargazers,
+                        "error": error,
+                        "repo_url": repo_url,
+                        "filter_type": filter_type,
+                        "current_page": page,
+                        "total_pages": 0,
+                    },
+                )
+
+            path_parts = parsed_url.path.strip("/").split("/")
+            if len(path_parts) < 2:
+                error = "Invalid GitHub repository URL format"
+                return render(
+                    request,
+                    "repo/stargazers.html",
+                    {
+                        "stargazers": stargazers,
+                        "error": error,
+                        "repo_url": repo_url,
+                        "filter_type": filter_type,
+                        "current_page": page,
+                        "total_pages": 0,
+                    },
+                )
+
+            owner = path_parts[0]
+            repo = path_parts[1]
+
+            # GitHub API endpoint for stargazers
+            api_url = f"https://api.github.com/repos/{owner}/{repo}/stargazers"
+            headers = {
+                "Accept": "application/vnd.github.v3+json",
+            }
+
+            # Use GitHub token from settings
+            if not settings.GITHUB_TOKEN or settings.GITHUB_TOKEN == "blank":
+                error = "GitHub token not configured. Please contact the administrator."
+                return render(
+                    request,
+                    "repo/stargazers.html",
+                    {
+                        "stargazers": stargazers,
+                        "error": error,
+                        "repo_url": repo_url,
+                        "filter_type": filter_type,
+                        "current_page": page,
+                        "total_pages": 0,
+                    },
+                )
+
+            headers["Authorization"] = f"token {settings.GITHUB_TOKEN}"
+
+            # First verify the token is valid
+            verify_url = "https://api.github.com/user"
+            verify_response = requests.get(verify_url, headers=headers)
+            if verify_response.status_code != 200:
+                error = "GitHub authentication failed. Please contact the administrator."
+                return render(
+                    request,
+                    "repo/stargazers.html",
+                    {
+                        "stargazers": stargazers,
+                        "error": error,
+                        "repo_url": repo_url,
+                        "filter_type": filter_type,
+                        "current_page": page,
+                        "total_pages": 0,
+                    },
+                )
+
+            # Fetch all stargazers using pagination
+            all_stargazers = []
+            current_page = 1
+            api_per_page = 100  # Maximum allowed by GitHub API
+
+            while True:
+                paginated_url = f"{api_url}?page={current_page}&per_page={api_per_page}"
+                response = requests.get(paginated_url, headers=headers)
+
+                if response.status_code == 200:
+                    page_stargazers = response.json()
+                    if not page_stargazers:  # No more stargazers
+                        break
+                    all_stargazers.extend(page_stargazers)
+                    current_page += 1
+                elif response.status_code == 404:
+                    error = "Repository not found. Please check the URL and try again."
+                    break
+                elif response.status_code == 403:
+                    error = "Rate limit exceeded. Please try again later."
+                    break
+                elif response.status_code == 401:
+                    error = "Authentication failed. Please contact the administrator."
+                    break
+                else:
+                    error = f"Error fetching stargazers (Status code: {response.status_code})"
+                    break
+
+            if not error:
+                # Apply filtering based on filter_type
+                if filter_type == "recent":
+                    # For recent stargazers, we want the last ones in the list (newest)
+                    # Since GitHub API returns oldest first, we just reverse the list
+                    all_stargazers.reverse()
+                # Calculate pagination
+                total_stargazers = len(all_stargazers)
+                total_pages = (total_stargazers + per_page - 1) // per_page
+
+                # Ensure page is within valid range
+                page = max(1, min(page, total_pages))
+
+                # Get stargazers for current page
+                start_idx = (page - 1) * per_page
+                end_idx = start_idx + per_page
+                stargazers = all_stargazers[start_idx:end_idx]
+
+                return render(
+                    request,
+                    "repo/stargazers.html",
+                    {
+                        "stargazers": stargazers,
+                        "error": error,
+                        "repo_url": repo_url,
+                        "filter_type": filter_type,
+                        "current_page": page,
+                        "total_pages": total_pages,
+                        "total_stargazers": total_stargazers,
+                    },
+                )
+
+        except Exception as e:
+            error = "An error occurred while processing your request"
+            # Log the actual error for debugging
+            print(f"Error in view_stargazers: {str(e)}")
+
+    return render(
+        request,
+        "repo/stargazers.html",
+        {
+            "stargazers": stargazers,
+            "error": error,
+            "repo_url": repo_url,
+            "filter_type": filter_type,
+            "current_page": page,
+            "total_pages": 0,
+            "total_stargazers": 0,
+        },
+    )

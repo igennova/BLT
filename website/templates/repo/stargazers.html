@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% load static %}
+{% load custom_filters %}
+{% load humanize %}
+{% block title %}Stargazers{% endblock %}
+{% block content %}
+    {% include "includes/sidenav.html" %}
+    <div class="container mx-auto px-4 py-8">
+        <div class="max-w-2xl mx-auto">
+            <h1 class="text-3xl font-bold mb-8 text-[#e74c3c]">GitHub Stargazers</h1>
+            <!-- Form for entering repository URL -->
+            <form method="post" class="mb-8">
+                {% csrf_token %}
+                <div class="flex gap-4">
+                    <input type="url"
+                           name="repo_url"
+                           value="{{ repo_url }}"
+                           placeholder="Enter GitHub repository URL (e.g., https://github.com/owner/repo)"
+                           class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#e74c3c]"
+                           required>
+                    <button type="submit"
+                            class="px-6 py-2 bg-[#e74c3c] text-white rounded-lg hover:bg-red-600 transition-colors">
+                        View Stargazers
+                    </button>
+                </div>
+            </form>
+            {% if error %}
+                <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">{{ error }}</div>
+            {% endif %}
+            {% if stargazers %}
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <!-- Filter Controls -->
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-xl font-semibold">Stargazers ({{ stargazers|length }})</h2>
+                        <div class="flex gap-2">
+                            <form method="get" class="inline">
+                                <input type="hidden" name="repo_url" value="{{ repo_url }}">
+                                <input type="hidden" name="filter" value="all">
+                                <button type="submit"
+                                        class="px-4 py-2 rounded-lg {% if filter_type == 'all' %}bg-[#e74c3c] text-white{% else %}bg-gray-100 text-gray-700 hover:bg-gray-200{% endif %}">
+                                    All
+                                </button>
+                            </form>
+                            <form method="get" class="inline">
+                                <input type="hidden" name="repo_url" value="{{ repo_url }}">
+                                <input type="hidden" name="filter" value="recent">
+                                <button type="submit"
+                                        class="px-4 py-2 rounded-lg {% if filter_type == 'recent' %}bg-[#e74c3c] text-white{% else %}bg-gray-100 text-gray-700 hover:bg-gray-200{% endif %}">
+                                    Recent
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {% for stargazer in stargazers %}
+                        <div class="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
+                            <img src="{{ stargazer.avatar_url }}"
+                                 alt="{{ stargazer.login }}'s avatar"
+                                 class="w-16 h-16 rounded-full mx-auto"
+                                 height="64"
+                                 width="64">
+                            <div>
+                                <a href="{{ stargazer.html_url }}"
+                                   target="_blank"
+                                   class="text-[#e74c3c] hover:underline">{{ stargazer.login }}</a>
+                                <p class="text-sm text-gray-500">ID: {{ stargazer.id }}</p>
+                                {% if stargazer.starred_at %}
+                                    <p class="text-xs text-gray-400">Starred: {{ stargazer.starred_at|date:"M d, Y" }}</p>
+                                {% endif %}
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        {% endif %}
+        <!-- Pagination -->
+        {% if total_pages > 1 %}
+            <div class="flex flex-col items-center space-y-4 mt-8">
+                <div class="flex justify-center items-center space-x-2">
+                    {% if current_page > 1 %}
+                        <a href="?repo_url={{ repo_url }}&filter={{ filter_type }}&page={{ current_page|add:'-1' }}"
+                           class="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 transition-colors">Previous</a>
+                    {% endif %}
+                    <!-- Page Numbers -->
+                    <div class="flex items-center space-x-2">
+                        {% for page_num in total_pages|get_range %}
+                            {% if page_num == current_page %}
+                                <span class="px-4 py-2 bg-[#e74c3c] text-white rounded-lg">{{ page_num }}</span>
+                            {% elif page_num == 1 or page_num == total_pages or page_num|add:"-2" <= current_page and page_num|add:"2" >= current_page %}
+                                <a href="?repo_url={{ repo_url }}&filter={{ filter_type }}&page={{ page_num }}"
+                                   class="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 transition-colors">
+                                    {{ page_num }}
+                                </a>
+                            {% elif page_num == 2 and current_page > 3 %}
+                                <span class="px-2">...</span>
+                            {% elif page_num == total_pages|add:"-1" and current_page < total_pages|add:"-2" %}
+                                <span class="px-2">...</span>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                    {% if current_page < total_pages %}
+                        <a href="?repo_url={{ repo_url }}&filter={{ filter_type }}&page={{ current_page|add:'1' }}"
+                           class="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 transition-colors">Next</a>
+                    {% endif %}
+                </div>
+                <span class="text-gray-600">Page {{ current_page }} of {{ total_pages }}</span>
+            {% endif %}
+        </div>
+    </div>
+{% endblock %}
