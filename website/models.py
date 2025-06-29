@@ -2521,3 +2521,82 @@ class ReminderSettings(models.Model):
         if not hasattr(cls, "_timezone_choices"):
             cls._timezone_choices = [(tz, tz) for tz in pytz.common_timezones]
         return cls._timezone_choices
+
+
+class Lab(models.Model):
+    title = models.CharField(max_length=200)
+    description = models.TextField()
+    order = models.PositiveIntegerField()
+    created_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['order']
+
+    def __str__(self):
+        return self.title
+
+
+class Lesson(models.Model):
+    LESSON_TYPES = [
+        ('theory', 'Theory'),
+        ('simulation', 'Simulation')
+    ]
+
+    lab = models.ForeignKey(Lab, on_delete=models.CASCADE, related_name='lessons')
+    title = models.CharField(max_length=200)
+    description = models.TextField()
+    content = models.TextField(help_text="Main content or instructions for the lesson")
+    lesson_type = models.CharField(max_length=20, choices=LESSON_TYPES, default='theory')
+    simulation_type = models.CharField(
+        max_length=20, 
+        choices=[('sql_injection', 'SQL Injection')],
+        null=True,
+        blank=True,
+        help_text="Type of simulation for simulation lessons"
+    )
+    order = models.PositiveIntegerField()
+    created_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['order']
+
+    def __str__(self):
+        return self.title
+
+    @staticmethod
+    def get_sql_injection_login_config():
+        return {
+            "type": "login_form",
+            "database": {
+                "tables": {
+                    "users": {
+                        "columns": ["id", "username", "password", "role"],
+                        "data": [
+                            {"id": 1, "username": "admin", "password": "secretpass123", "role": "admin"},
+                            {"id": 2, "username": "user", "password": "userpass456", "role": "user"}
+                        ]
+                    }
+                }
+            },
+            "success_conditions": [
+                {"type": "bypass_login", "points": 100}
+            ]
+        }
+
+
+class UserProgress(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    lesson = models.ForeignKey(Lesson, on_delete=models.CASCADE)
+    completed = models.BooleanField(default=False)
+    points_earned = models.PositiveIntegerField(default=0)
+    submitted_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ['user', 'lesson']
+        ordering = ['-updated_at']
+
+    def __str__(self):
+        return f"{self.user.username}'s progress on {self.lesson.title}"

@@ -1,0 +1,451 @@
+{% extends "base.html" %}
+{% load static %}
+{% load custom_filters %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <div class="mb-8">
+        <a href="{% url 'website:lab_detail' lab.id %}" class="text-red-600 hover:text-red-700">
+            <i class="fas fa-arrow-left mr-2"></i>Back to {{ lab.title }}
+        </a>
+    </div>
+
+    <div class="bg-white rounded-lg shadow-lg overflow-hidden">
+        <div class="p-6">
+            <h1 class="text-3xl font-bold text-gray-900 mb-2">{{ lesson.title }}</h1>
+            <div class="flex items-center text-sm text-gray-500 mb-6">
+                <span>{{ lesson.get_content_type_display }}</span>
+                {% if lesson.duration %}
+                    <span class="mx-2">•</span>
+                    <span>{{ lesson.duration }} min</span>
+                {% endif %}
+            </div>
+
+            <div class="prose max-w-none mb-8">
+                {{ lesson.content|safe }}
+            </div>
+
+            {% if lesson.content_type == 'SIMULATION' %}
+                <div id="simulation-container" class="border rounded-lg p-6 mb-8">
+                    <h2 class="text-xl font-semibold mb-4">Interactive Simulation</h2>
+                    
+                    {% if lesson.simulation_config.type == 'login_form' %}
+                        <!-- SQL Injection Login Form -->
+                        <div class="max-w-md mx-auto">
+                            <div class="mb-4 p-4 bg-blue-50 text-blue-700 rounded-lg">
+                                <p class="text-sm">
+                                    <i class="fas fa-info-circle mr-2"></i>
+                                    Try to bypass the login by exploiting SQL injection. The backend uses a query like:
+                                    <code class="block mt-2 p-2 bg-gray-800 text-white rounded">
+                                        SELECT * FROM users WHERE username='$input' AND password='$input'
+                                    </code>
+                                </p>
+                            </div>
+                            <form id="sql-injection-form" class="space-y-4">
+                                {% csrf_token %}
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Username</label>
+                                    <input type="text" name="input" 
+                                           class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-red-500 focus:ring-red-500"
+                                           placeholder="Try: admin' OR '1'='1">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                                    <input type="text" name="password" 
+                                           class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-red-500 focus:ring-red-500"
+                                           placeholder="Try: anything' OR '1'='1">
+                                </div>
+                                <button type="submit" 
+                                        class="w-full bg-red-600 text-white py-2 px-4 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2">
+                                    Login
+                                </button>
+                            </form>
+                        </div>
+
+                    {% elif lesson.simulation_config.type == 'comment_system' %}
+                        <!-- XSS Comment Form -->
+                        <div class="max-w-2xl mx-auto">
+                            <form id="xss-form" class="space-y-4">
+                                {% csrf_token %}
+                                {% for field in lesson.simulation_config.interface.form_fields %}
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700">{{ field.placeholder }}</label>
+                                        {% if field.type == 'textarea' %}
+                                            <textarea name="{{ field.name }}" rows="4"
+                                                      class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-red-500 focus:ring-red-500"
+                                                      placeholder="{{ field.placeholder }}"></textarea>
+                                        {% else %}
+                                            <input type="{{ field.type }}" name="{{ field.name }}"
+                                                   class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-red-500 focus:ring-red-500"
+                                                   placeholder="{{ field.placeholder }}">
+                                        {% endif %}
+                                    </div>
+                                {% endfor %}
+                                <button type="submit"
+                                        class="w-full bg-red-600 text-white py-2 px-4 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2">
+                                    {{ lesson.simulation_config.interface.submit_button }}
+                                </button>
+                            </form>
+                            <div id="comments-display" class="mt-8 space-y-4"></div>
+                        </div>
+
+                    {% elif lesson.simulation_config.type == 'file_upload' %}
+                        <!-- File Upload Form -->
+                        <div class="max-w-md mx-auto">
+                            <form id="file-upload-form" class="space-y-4">
+                                {% csrf_token %}
+                                <div class="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+                                    <input type="file" id="file-input" class="hidden">
+                                    <label for="file-input" class="cursor-pointer">
+                                        <i class="fas fa-cloud-upload-alt text-4xl text-gray-400 mb-2"></i>
+                                        <p class="text-sm text-gray-500">
+                                            Drag and drop a file or click to select
+                                        </p>
+                                        <p class="text-xs text-gray-400 mt-1">
+                                            Allowed types: {{ lesson.simulation_config.interface.form_fields.0.allowed_types|join:", " }}
+                                        </p>
+                                    </label>
+                                </div>
+                                <button type="submit"
+                                        class="w-full bg-red-600 text-white py-2 px-4 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2">
+                                    {{ lesson.simulation_config.interface.submit_button }}
+                                </button>
+                            </form>
+                        </div>
+                    {% endif %}
+
+                    <!-- Feedback Display -->
+                    <div id="simulation-feedback" class="mt-6 hidden">
+                        <div class="rounded-md p-4">
+                            <div class="flex items-center">
+                                <div class="flex-shrink-0">
+                                    <!-- Success Icon -->
+                                    <div class="success-icon hidden">
+                                        <svg class="h-5 w-5 text-green-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                                        </svg>
+                                    </div>
+                                    <!-- Progress Icon -->
+                                    <div class="progress-icon hidden">
+                                        <svg class="h-5 w-5 text-yellow-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd" />
+                                        </svg>
+                                    </div>
+                                </div>
+                                <div class="ml-3">
+                                    <h3 class="message text-sm font-medium"></h3>
+                                    <div class="mt-2 text-sm details"></div>
+                                    <div class="mt-2 points-earned hidden">
+                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                            +<span class="points">0</span> points
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Progress Display -->
+                    <div class="mt-8 p-4 bg-gray-50 rounded-lg">
+                        <h3 class="text-lg font-medium text-gray-900 mb-4">Your Progress</h3>
+                        <div class="space-y-4">
+                            <div class="flex items-center">
+                                <div class="flex-1">
+                                    <div class="flex items-center">
+                                        <div class="flex-1">
+                                            <div class="h-2 bg-gray-200 rounded-full">
+                                                <div class="progress-bar h-2 bg-red-600 rounded-full" style="width: 0%"></div>
+                                            </div>
+                                        </div>
+                                        <span class="ml-4 text-sm font-medium text-gray-700">
+                                            <span class="points-total">0</span> points
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="text-sm text-gray-500">
+                                Complete different injection techniques to earn more points!
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Common SQL Injection Examples -->
+                    <div class="mt-8">
+                        <h3 class="text-lg font-medium text-gray-900 mb-4">Common SQL Injection Examples</h3>
+                        <div class="grid gap-4 text-sm">
+                            <div class="p-3 bg-gray-50 rounded-lg">
+                                <code class="font-mono text-red-600">admin' OR '1'='1</code>
+                                <p class="mt-1 text-gray-600">Makes the WHERE clause always true</p>
+                                <p class="mt-1 text-xs text-gray-500">Points: 50</p>
+                            </div>
+                            <div class="p-3 bg-gray-50 rounded-lg">
+                                <code class="font-mono text-red-600">admin'--</code>
+                                <p class="mt-1 text-gray-600">Comments out the rest of the query</p>
+                                <p class="mt-1 text-xs text-gray-500">Points: 100</p>
+                            </div>
+                            <div class="p-3 bg-gray-50 rounded-lg">
+                                <code class="font-mono text-red-600">' UNION SELECT * FROM users--</code>
+                                <p class="mt-1 text-gray-600">Uses UNION to combine queries</p>
+                                <p class="mt-1 text-xs text-gray-500">Points: 150</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            {% elif lesson.content_type == 'QUIZ' %}
+                <div id="quiz-container" class="border rounded-lg p-6">
+                    <h2 class="text-xl font-semibold mb-6">Assessment</h2>
+                    
+                    {% for question in questions %}
+                        <div class="question-item mb-8 last:mb-0" data-question-id="{{ question.id }}">
+                            <h3 class="text-lg font-medium text-gray-900 mb-4">
+                                {{ forloop.counter }}. {{ question.question_text }}
+                            </h3>
+
+                            {% if question.question_type == 'MCQ' %}
+                                <div class="space-y-2">
+                                    {% for choice in question.options.choices %}
+                                        <label class="flex items-center space-x-3 p-3 rounded-lg border hover:bg-gray-50">
+                                            <input type="radio" name="question_{{ question.id }}" value="{{ forloop.counter0 }}"
+                                                   class="h-4 w-4 text-red-600 focus:ring-red-500">
+                                            <span class="text-gray-900">{{ choice }}</span>
+                                        </label>
+                                    {% endfor %}
+                                </div>
+
+                            {% elif question.question_type == 'CODING' %}
+                                <div class="space-y-4">
+                                    <div class="bg-gray-800 rounded-lg p-4">
+                                        <pre class="text-white"><code>{{ question.options.initial_code }}</code></pre>
+                                    </div>
+                                    <textarea name="question_{{ question.id }}" rows="6"
+                                              class="block w-full rounded-md border-gray-300 shadow-sm focus:border-red-500 focus:ring-red-500"
+                                              placeholder="Write your solution here..."></textarea>
+                                </div>
+
+                            {% else %}  <!-- TEXT answer -->
+                                <textarea name="question_{{ question.id }}" rows="4"
+                                          class="block w-full rounded-md border-gray-300 shadow-sm focus:border-red-500 focus:ring-red-500"
+                                          placeholder="Write your answer here..."></textarea>
+                            {% endif %}
+
+                            <div class="feedback mt-4 hidden">
+                                <div class="correct-feedback text-green-800 bg-green-50 p-4 rounded-md hidden">
+                                    <p class="font-medium">Correct!</p>
+                                    <p class="mt-2">{{ question.explanation }}</p>
+                                </div>
+                                <div class="incorrect-feedback text-red-800 bg-red-50 p-4 rounded-md hidden">
+                                    <p class="font-medium">Try Again</p>
+                                    <p class="mt-2">Review the material and try another answer.</p>
+                                </div>
+                            </div>
+                        </div>
+                    {% endfor %}
+
+                    <button id="submit-quiz"
+                            class="mt-6 w-full bg-red-600 text-white py-2 px-4 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2">
+                        Submit Answers
+                    </button>
+                </div>
+            {% elif lesson.content_type == 'THEORY' %}
+                <div class="theory-content prose max-w-none mb-8">
+                    {{ lesson.content|markdown }}
+                    
+                    <!-- MCQ Questions -->
+                    {% if lesson.questions %}
+                    <div class="mt-8 space-y-8">
+                        <h2 class="text-2xl font-bold text-gray-900">Knowledge Check</h2>
+                        
+                        {% for question in lesson.questions %}
+                        <div class="question-container bg-white shadow rounded-lg p-6" data-question-id="{{ question.id }}">
+                            <div class="question-header mb-4">
+                                <h3 class="text-lg font-medium text-gray-900">Question {{ forloop.counter }}</h3>
+                                <p class="text-sm text-gray-500">Points: {{ question.points }}</p>
+                            </div>
+                            
+                            <div class="question-content mb-4">
+                                <p class="text-gray-700">{{ question.question }}</p>
+                                
+                                <div class="mt-4 space-y-2">
+                                    {% for option in question.options %}
+                                    <label class="flex items-center p-3 border rounded-lg hover:bg-gray-50 cursor-pointer transition-colors">
+                                        <input type="radio" name="q_{{ question.id }}" value="{{ forloop.counter0 }}"
+                                               class="h-4 w-4 text-red-600 focus:ring-red-500">
+                                        <span class="ml-3 text-gray-700">{{ option }}</span>
+                                    </label>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            
+                            <div class="mt-4">
+                                <button type="button" 
+                                        class="check-answer inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
+                                    Check Answer
+                                </button>
+                            </div>
+                            
+                            <div class="feedback mt-4 hidden">
+                                <div class="rounded-md p-4">
+                                    <div class="flex">
+                                        <div class="flex-shrink-0">
+                                            <i class="fas fa-check text-green-400 success-icon hidden"></i>
+                                            <i class="fas fa-times text-red-400 error-icon hidden"></i>
+                                        </div>
+                                        <div class="ml-3">
+                                            <p class="text-sm font-medium feedback-message"></p>
+                                            <div class="mt-2 text-sm feedback-explanation"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                        
+                        <!-- Progress Bar -->
+                        <div class="mt-8 p-4 bg-gray-50 rounded-lg">
+                            <h3 class="text-lg font-medium text-gray-900 mb-4">Your Progress</h3>
+                            <div class="space-y-4">
+                                <div class="flex items-center">
+                                    <div class="flex-1">
+                                        <div class="flex items-center">
+                                            <div class="flex-1">
+                                                <div class="h-2 bg-gray-200 rounded-full">
+                                                    <div class="progress-bar h-2 bg-red-600 rounded-full" style="width: 0%"></div>
+                                                </div>
+                                            </div>
+                                            <span class="ml-4 text-sm font-medium text-gray-700">
+                                                <span class="correct-count">0</span>/<span class="total-count">{{ lesson.questions|length }}</span> Questions
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const totalQuestions = document.querySelectorAll('.question-container').length;
+    let correctAnswers = 0;
+
+    // Handle individual question submission
+    document.querySelectorAll('.check-answer').forEach(button => {
+        button.addEventListener('click', async function() {
+            const questionContainer = this.closest('.question-container');
+            const questionId = questionContainer.dataset.questionId;
+            const selectedOption = questionContainer.querySelector('input[type="radio"]:checked');
+            
+            if (!selectedOption) {
+                alert('Please select an answer before checking.');
+                return;
+            }
+            
+            try {
+                const response = await fetch("{% url 'website:check_answer' %}", {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCookie('csrftoken')
+                    },
+                    body: JSON.stringify({
+                        question_id: questionId,
+                        answer: selectedOption.value
+                    })
+                });
+                
+                const result = await response.json();
+                showQuestionFeedback(questionContainer, result);
+                
+                if (result.success && !questionContainer.classList.contains('answered-correctly')) {
+                    questionContainer.classList.add('answered-correctly');
+                    correctAnswers++;
+                    updateProgress();
+                    
+                    // Check if all questions are answered correctly
+                    if (correctAnswers === totalQuestions) {
+                        markLessonComplete();
+                    }
+                }
+            } catch (error) {
+                console.error('Error:', error);
+            }
+        });
+    });
+
+    function showQuestionFeedback(container, result) {
+        const feedback = container.querySelector('.feedback');
+        const message = feedback.querySelector('.feedback-message');
+        const explanation = feedback.querySelector('.feedback-explanation');
+        const successIcon = feedback.querySelector('.success-icon');
+        const errorIcon = feedback.querySelector('.error-icon');
+        
+        feedback.classList.remove('hidden');
+        message.textContent = result.success ? 'Correct!' : 'Incorrect, try again.';
+        explanation.textContent = result.explanation;
+        
+        if (result.success) {
+            feedback.querySelector('.rounded-md').className = 'rounded-md p-4 bg-green-50';
+            successIcon.classList.remove('hidden');
+            errorIcon.classList.add('hidden');
+            
+            // Disable the question after correct answer
+            container.querySelectorAll('input[type="radio"]').forEach(radio => {
+                radio.disabled = true;
+            });
+            container.querySelector('.check-answer').disabled = true;
+        } else {
+            feedback.querySelector('.rounded-md').className = 'rounded-md p-4 bg-red-50';
+            successIcon.classList.add('hidden');
+            errorIcon.classList.remove('hidden');
+        }
+    }
+
+    function updateProgress() {
+        const percentage = (correctAnswers / totalQuestions) * 100;
+        document.querySelector('.progress-bar').style.width = `${percentage}%`;
+        document.querySelector('.correct-count').textContent = correctAnswers;
+    }
+
+    async function markLessonComplete() {
+        try {
+            await fetch("{% url 'website:complete_lesson' lesson.id %}", {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken')
+                }
+            });
+            
+            // Show completion message
+            const completionMessage = document.createElement('div');
+            completionMessage.className = 'mt-8 rounded-md bg-green-50 p-4';
+            completionMessage.innerHTML = `
+                <div class="flex">
+                    <div class="flex-shrink-0">
+                        <i class="fas fa-check-circle text-green-400"></i>
+                    </div>
+                    <div class="ml-3">
+                        <h3 class="text-sm font-medium text-green-800">
+                            Lesson Completed!
+                        </h3>
+                        <div class="mt-2 text-sm text-green-700">
+                            Congratulations! You've successfully completed this lesson.
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.querySelector('.theory-content').appendChild(completionMessage);
+        } catch (error) {
+            console.error('Error:', error);
+        }
+    }
+});
+</script>
+{% endblock %} 

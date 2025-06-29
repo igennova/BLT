@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <div class="max-w-4xl mx-auto">
+        <!-- Lab Header -->
+        <div class="mb-8">
+            <h1 class="text-3xl font-bold mb-4">{{ lab.title }}</h1>
+            <p class="text-gray-600">{{ lab.description }}</p>
+        </div>
+        
+        <!-- Lessons List -->
+        <div class="space-y-6">
+            {% for lesson in lessons %}
+            <div class="bg-white shadow-lg rounded-lg overflow-hidden">
+                <div class="p-6">
+                    <div class="flex items-start justify-between">
+                        <div class="flex-1">
+                            <h2 class="text-xl font-bold mb-2">{{ lesson.title }}</h2>
+                            <p class="text-gray-600 mb-4">{{ lesson.description }}</p>
+                            
+                            <!-- Lesson Info -->
+                            <div class="flex items-center space-x-4 text-sm text-gray-500 mb-4">
+                                {% if lesson.duration %}
+                                <div class="flex items-center">
+                                    <i class="fas fa-clock mr-1"></i>
+                                    <span>{{ lesson.duration }} minutes</span>
+                                </div>
+                                {% endif %}
+                                
+                                <div class="flex items-center">
+                                    <i class="fas fa-tag mr-1"></i>
+                                    <span>{{ lesson.get_content_type_display }}</span>
+                                </div>
+                            </div>
+                            
+                            <!-- Progress -->
+                            <div class="flex items-center space-x-2">
+                                {% if lesson.progress.status == 'COMPLETED' %}
+                                <i class="fas fa-check-circle text-green-500"></i>
+                                <span class="text-green-600 text-sm font-medium">Completed</span>
+                                {% elif lesson.progress.status == 'IN_PROGRESS' %}
+                                <i class="fas fa-clock text-yellow-500"></i>
+                                <span class="text-yellow-600 text-sm font-medium">In Progress</span>
+                                {% else %}
+                                <i class="fas fa-circle text-gray-300"></i>
+                                <span class="text-gray-500 text-sm font-medium">Not Started</span>
+                                {% endif %}
+                                
+                                {% if lesson.progress.points_earned > 0 %}
+                                <span class="text-sm text-gray-500 ml-2">
+                                    ({{ lesson.progress.points_earned }} points)
+                                </span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <!-- Start/Continue Button -->
+                        <div class="ml-4">
+                            <a href="{% url 'website:lesson_detail' lesson.id %}" 
+                               class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
+                                {% if lesson.progress.status == 'COMPLETED' %}
+                                    Review Lesson
+                                {% elif lesson.progress.status == 'IN_PROGRESS' %}
+                                    Continue
+                                {% else %}
+                                    Start Lesson
+                                {% endif %}
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% empty %}
+            <div class="text-center py-12">
+                <h3 class="text-lg font-medium text-gray-900 mb-2">No Lessons Available</h3>
+                <p class="text-gray-500">This lab doesn't have any lessons yet. Check back later!</p>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %} 
